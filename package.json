@@ -1,7 +1,7 @@
 {
-  "name": "medicalcrm",
+  "name": "sendgrid-email-sender",
   "version": "1.0.0",
-  "description": "",
+  "description": "Example app to send SendGrid template emails via a Cloudflare Worker",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
