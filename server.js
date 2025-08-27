@@ -28,6 +28,20 @@ app.use(express.json());
 // Serve the client UI from /public
 app.use(express.static(path.join(__dirname, 'public')));
 
+// POST /api/login -> basic placeholder that validates presence of credentials
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (typeof username !== 'string' || !username.trim() ||
+      typeof password !== 'string' || !password.trim()) {
+    return res
+      .status(400)
+      .json({ error: 'username and password are required' });
+  }
+
+  return res.json({ success: true });
+});
+
 // POST /api/send-email -> forwards email and tracking number to Cloudflare
 app.post('/api/send-email', async (req, res) => {
   try {
