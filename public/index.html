@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>IntakeQ Client Lookup by ClientID</title>
+  <title>Send Tracking Email</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { --gap: 12px; --radius: 10px; }
@@ -12,114 +12,79 @@
     h1 { margin: 0 0 12px; font-size: 1.4rem; }
     form { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: end; margin: 10px 0 16px; }
     label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input[type="text"] { padding: 10px 12px; border: 1px solid #d4d7de; border-radius: 8px; font-size: 1rem; width: 240px; }
+    input[type="email"], input[type="text"] { padding: 10px 12px; border: 1px solid #d4d7de; border-radius: 8px; font-size: 1rem; width: 240px; }
     button { padding: 10px 14px; border: 0; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; background: #1f6feb; color: #fff; }
     button[disabled] { opacity: .6; cursor: not-allowed; }
-    .row { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 6px 0; }
-    .key { color: #6b7280; }
     .muted { color: #6b7280; font-size: 0.92rem; }
     .error { background: #fde8e8; color: #991b1b; border: 1px solid #fecaca; padding: 10px; border-radius: 8px; }
-    pre { background: #0b1020; color: #d7e3ff; padding: 14px; border-radius: 8px; overflow: auto; font-size: 0.9rem; }
-    .json-toggle { margin-top: 10px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Lookup IntakeQ Client by <code>ClientID</code></h1>
-      <p class="muted">
-        Enter a numeric ClientID and we’ll retrieve the full client profile (using the server-side proxy).
-      </p>
-
-      <form id="lookup" novalidate>
+      <h1>Send Tracking Email</h1>
+      <form id="sendForm" novalidate>
         <div>
-          <label for="clientId">ClientID</label>
-          <input id="clientId" name="clientId" type="text" inputmode="numeric" pattern="\\d+" required
-                 placeholder="e.g., 12345" aria-describedby="cidHelp" />
-          <div id="cidHelp" class="muted">Numbers only.</div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required placeholder="user@example.com" />
         </div>
-        <button id="goBtn" type="submit">Get Client</button>
+        <div>
+          <label for="tracking">Tracking Number</label>
+          <input id="tracking" name="tracking" type="text" required placeholder="e.g., 1Z999..." />
+        </div>
+        <button id="sendBtn" type="submit">Send Email</button>
         <div role="status" aria-live="polite" id="status" class="muted"></div>
       </form>
-
       <div id="result"></div>
-      <div id="raw" style="display:none;">
-        <button class="json-toggle" id="hideRaw">Hide Raw JSON</button>
-        <pre id="jsonOut" aria-label="Raw JSON result"></pre>
-      </div>
     </div>
   </div>
 
   <script>
-    const form = document.getElementById('lookup');
-    const goBtn = document.getElementById('goBtn');
-    const statusEl = document.getElementById('status');
+    const form = document.getElementById('sendForm');
+    const btn = document.getElementById('sendBtn');
     const resultEl = document.getElementById('result');
-    const rawPane = document.getElementById('raw');
-    const jsonOut = document.getElementById('jsonOut');
-    const hideRawBtn = document.getElementById('hideRaw');
-
-    hideRawBtn.addEventListener('click', () => rawPane.style.display = 'none');
-
-    function fmtDate(ts) {
-      if (!ts && ts !== 0) return '—';
-      // IntakeQ uses Unix timestamp in milliseconds for many dates.
-      const d = new Date(Number(ts));
-      return isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10);
-    }
-
-    function renderClient(c) {
-      resultEl.innerHTML = `
-        <div class="row"><div class="key">ClientId</div><div>${c.ClientId ?? '—'}</div></div>
-        <div class="row"><div class="key">Name</div><div>${c.Name ?? '—'}</div></div>
-        <div class="row"><div class="key">Email</div><div>${c.Email ?? '—'}</div></div>
-        <div class="row"><div class="key">Phone</div><div>${c.Phone ?? '—'}</div></div>
-        <div class="row"><div class="key">DOB</div><div>${fmtDate(c.DateOfBirth)}</div></div>
-        <div class="row"><div class="key">Tags</div><div>${Array.isArray(c.Tags) ? c.Tags.join(', ') : '—'}</div></div>
-        <div class="row"><div class="key">Address</div><div>${c.Address ?? '—'}</div></div>
-        <div class="row"><div class="key">Last Activity</div><div>${c.LastActivityName ?? '—'} (${fmtDate(c.LastActivityDate)})</div></div>
-        <div class="row"><div class="key">ExternalClientId</div><div>${c.ExternalClientId ?? '—'}</div></div>
-      `;
-      jsonOut.textContent = JSON.stringify(c, null, 2);
-      rawPane.style.display = 'block';
-    }
+    const statusEl = document.getElementById('status');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const clientId = document.getElementById('clientId').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const tracking = document.getElementById('tracking').value.trim();
+
       resultEl.innerHTML = '';
-      rawPane.style.display = 'none';
       statusEl.textContent = '';
 
-      if (!/^\d+$/.test(clientId)) {
-        resultEl.innerHTML = '<div class="error">Please enter a numeric ClientID.</div>';
+      if (!email || !tracking) {
+        resultEl.innerHTML = '<div class="error">Both fields are required.</div>';
         return;
       }
 
-      goBtn.disabled = true;
-      statusEl.textContent = 'Looking up client…';
+      btn.disabled = true;
+      statusEl.textContent = 'Sending email…';
 
       try {
-        const resp = await fetch(`/api/client/${encodeURIComponent(clientId)}`);
+        const resp = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, trackingNumber: tracking })
+        });
+
         const data = await resp.json();
 
         if (!resp.ok) {
           const msg = data && data.error ? data.error : `Request failed (${resp.status})`;
           resultEl.innerHTML = `<div class="error">${msg}</div>`;
-          statusEl.textContent = '';
-          return;
+        } else {
+          resultEl.innerHTML = '<div>✅ Email sent.</div>';
         }
-
-        renderClient(data);
-        statusEl.textContent = 'Done.';
       } catch (err) {
         resultEl.innerHTML = `<div class="error">Network error: ${String(err)}</div>`;
-        statusEl.textContent = '';
       } finally {
-        goBtn.disabled = false;
+        btn.disabled = false;
+        statusEl.textContent = '';
       }
     });
   </script>
 </body>
 </html>
+

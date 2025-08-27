@@ -1,9 +1,10 @@
 // server.js
-// Minimal proxy to safely call IntakeQ's Client API from the browser.
+// Minimal Express server that forwards email + tracking number to a Cloudflare
+// endpoint which is expected to send a SendGrid template email.
 //
 // Requirements:
-//   - Node 18+ (for built-in fetch). If on Node <18, `npm i node-fetch` and import it.
-//   - A .env file with INTAKEQ_API_KEY=your_api_key_here
+//   - Node 18+ for the built-in fetch API.
+//   - .env file with SENDGRID_ENDPOINT set to your Cloudflare Worker URL.
 //
 // Start:  node server.js
 // Visit:  http://localhost:3000
@@ -13,9 +14,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-const INTAKEQ_API_KEY = process.env.INTAKEQ_API_KEY;
-if (!INTAKEQ_API_KEY) {
-  console.warn('[WARN] INTAKEQ_API_KEY is not set. Create a .env file with your key.');
+const SENDGRID_ENDPOINT = process.env.SENDGRID_ENDPOINT;
+if (!SENDGRID_ENDPOINT) {
+  console.warn('[WARN] SENDGRID_ENDPOINT is not set. Create a .env file.');
 }
 
 const app = express();
@@ -27,47 +28,34 @@ app.use(express.json());
 // Serve the client UI from /public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// GET /api/client/:clientId -> returns a single client profile (includeProfile=true)
-app.get('/api/client/:clientId', async (req, res) => {
+// POST /api/send-email -> forwards email and tracking number to Cloudflare
+app.post('/api/send-email', async (req, res) => {
   try {
-    const clientId = req.params.clientId.trim();
+    const { email, trackingNumber } = req.body || {};
 
-    // IntakeQ lets you pass the numeric Client ID to search= for an exact match.
-    if (!/^\d+$/.test(clientId)) {
-      return res.status(400).json({ error: 'clientId must be numeric' });
+    if (typeof email !== 'string' || !email.trim() ||
+        typeof trackingNumber !== 'string' || !trackingNumber.trim()) {
+      return res
+        .status(400)
+        .json({ error: 'email and trackingNumber are required' });
     }
 
-    const url = new URL('https://intakeq.com/api/v1/clients'); // Base URL per docs.
-    url.searchParams.set('search', clientId);
-    url.searchParams.set('includeProfile', 'true'); // return full profile fields.
-
-    const iqResp = await fetch(url, {
-      headers: {
-        'X-Auth-Key': INTAKEQ_API_KEY, // Auth header required by IntakeQ.
-        'Accept': 'application/json'
-      }
+    const cfResp = await fetch(SENDGRID_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), trackingNumber: trackingNumber.trim() })
     });
 
-    if (iqResp.status === 401 || iqResp.status === 403) {
-      return res.status(401).json({ error: 'Unauthorized. Check X-Auth-Key / API permissions.' });
+    if (!cfResp.ok) {
+      const text = await cfResp.text().catch(() => '');
+      return res
+        .status(cfResp.status)
+        .json({ error: 'Cloudflare request failed', status: cfResp.status, body: text });
     }
 
-    if (!iqResp.ok) {
-      const text = await iqResp.text().catch(() => '');
-      return res.status(iqResp.status).json({ error: 'IntakeQ API error', status: iqResp.status, body: text });
-    }
-
-    const data = await iqResp.json();
-
-    // The query endpoint returns an array. For numeric ClientID, it should be an exact match.
-    // Return the first result or 404 if none.
-    if (!Array.isArray(data) || data.length === 0) {
-      return res.status(404).json({ error: `Client ${clientId} not found` });
-    }
-
-    // If IntakeQ ever returns more than one (edge case), pick the client whose ClientId matches.
-    const exact = data.find(c => String(c.ClientId) === clientId) || data[0];
-    return res.json(exact);
+    // Try to parse JSON response; if none, return empty object.
+    const data = await cfResp.json().catch(() => ({}));
+    return res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error', details: String(err) });
@@ -76,5 +64,6 @@ app.get('/api/client/:clientId', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Client lookup tool running on http://localhost:${PORT}`);
+  console.log(`Email sender running on http://localhost:${PORT}`);
 });
+
