@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Send Tracking Email</title>
+  <title>Login</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { --gap: 12px; --radius: 10px; }
@@ -12,7 +12,7 @@
     h1 { margin: 0 0 12px; font-size: 1.4rem; }
     form { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: end; margin: 10px 0 16px; }
     label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input[type="email"], input[type="text"] { padding: 10px 12px; border: 1px solid #d4d7de; border-radius: 8px; font-size: 1rem; width: 240px; }
+    input[type="text"], input[type="password"] { padding: 10px 12px; border: 1px solid #d4d7de; border-radius: 8px; font-size: 1rem; width: 240px; }
     button { padding: 10px 14px; border: 0; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; background: #1f6feb; color: #fff; }
     button[disabled] { opacity: .6; cursor: not-allowed; }
     .muted { color: #6b7280; font-size: 0.92rem; }
@@ -22,18 +22,17 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Send Tracking Email</h1>
-      <p class="muted"><a href="login.html">Login</a></p>
-      <form id="sendForm" novalidate>
+      <h1>Login</h1>
+      <form id="loginForm" novalidate>
         <div>
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" required placeholder="user@example.com" />
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required placeholder="user" />
         </div>
         <div>
-          <label for="tracking">Tracking Number</label>
-          <input id="tracking" name="tracking" type="text" required placeholder="e.g., 1Z999..." />
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="••••••" />
         </div>
-        <button id="sendBtn" type="submit">Send Email</button>
+        <button id="loginBtn" type="submit">Login</button>
         <div role="status" aria-live="polite" id="status" class="muted"></div>
       </form>
       <div id="result"></div>
@@ -41,42 +40,42 @@
   </div>
 
   <script>
-    const form = document.getElementById('sendForm');
-    const btn = document.getElementById('sendBtn');
+    const form = document.getElementById('loginForm');
+    const btn = document.getElementById('loginBtn');
     const resultEl = document.getElementById('result');
     const statusEl = document.getElementById('status');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const email = document.getElementById('email').value.trim();
-      const tracking = document.getElementById('tracking').value.trim();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
 
       resultEl.innerHTML = '';
       statusEl.textContent = '';
 
-      if (!email || !tracking) {
+      if (!username || !password) {
         resultEl.innerHTML = '<div class="error">Both fields are required.</div>';
         return;
       }
 
       btn.disabled = true;
-      statusEl.textContent = 'Sending email…';
+      statusEl.textContent = 'Logging in…';
 
       try {
-        const resp = await fetch('/api/send-email', {
+        const resp = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, trackingNumber: tracking })
+          body: JSON.stringify({ username, password })
         });
 
         const data = await resp.json();
 
-        if (!resp.ok) {
+        if (!resp.ok || !data.success) {
           const msg = data && data.error ? data.error : `Request failed (${resp.status})`;
           resultEl.innerHTML = `<div class="error">${msg}</div>`;
         } else {
-          resultEl.innerHTML = '<div>✅ Email sent.</div>';
+          resultEl.innerHTML = '<div>✅ Logged in.</div>';
         }
       } catch (err) {
         resultEl.innerHTML = `<div class="error">Network error: ${String(err)}</div>`;
@@ -88,4 +87,3 @@
   </script>
 </body>
 </html>
-
